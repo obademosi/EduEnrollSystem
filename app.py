@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify
+#Connect to loact host on system
+
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
-#Connect to loact host on system
 app = Flask(__name__)
-app.config['EduES'] = 'postgresql://localhost'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://ojbademosi:password@localhost:5432/ojbademosi'
 db = SQLAlchemy(app)
 
 # Student model
