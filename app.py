@@ -2,13 +2,31 @@ import os
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://ojbademosi:password@localhost:5432/ojbademosi'
+
+# Collect environment variables from .env file
+db_user = os.getenv('DATABASE_USER', 'ojbademosi')
+db_password = os.getenv('DATABASE_PASSWORD', 'password')
+db_host = os.getenv('DATABASE_HOST', 'localhost')
+db_port = os.getenv('DATABASE_PORT', '5432')
+db_name = os.getenv('DATABASE_NAME', 'ojbademosi')
+
+# Construct the PostgreSQL URI with user, password, host, port, and database name
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+
+# Set debug mode based on environment variable
+app.config['DEBUG'] = os.getenv('DEBUG', 'False').lower() in ['true', '1', 't']
+
 db = SQLAlchemy(app)
 
 # Ensure the database tables are created
-db.create_all()
+with app.app_context():
+    db.create_all()
 
 # Student model
 class Student(db.Model):
@@ -56,6 +74,8 @@ class Grade(db.Model):
 def list_courses():
     print("Courses API was called")  # Debugging print
     courses = Course.query.join(Professor).all()
+    if not courses:
+        return jsonify({"message": "No courses found"}), 404
     course_list = [{'course_id': course.course_id, 'course_name': course.course_name, 'professor': course.professor.name} for course in courses]
     print(f"Courses found: {course_list}")  # Debugging print
     return jsonify(course_list), 200
@@ -79,10 +99,15 @@ def enroll_student():
     # Enroll the student
     enrollment = Enrollment(student_id=student_id, course_id=course_id)
     db.session.add(enrollment)
-    db.session.commit()
-
-    print(f"Student {student_id} enrolled in course {course_id}")  # Debugging print
-    return jsonify({"message": "Student enrolled successfully"}), 201
+    
+    try:
+        db.session.commit()
+        print(f"Student {student_id} enrolled in course {course_id}")  # Debugging print
+        return jsonify({"message": "Student enrolled successfully"}), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error enrolling student: {e}")
+        return jsonify({"error": "An error occurred while enrolling the student"}), 500
 
 # This endpoint allows professors to assign grades to students in their course. (C)
 @app.route('/api/assign-grade', methods=['POST'])
@@ -124,4 +149,6 @@ def get_average_grade():
     return jsonify(avg_grade_report), 200
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()  # Ensure tables are created
     app.run(debug=True)
